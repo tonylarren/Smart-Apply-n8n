@@ -46,6 +46,7 @@ This workflow automatically collects remote job postings, filters them to keep o
 - Still so much to improve
 
 ## Coming Soon
+- **Relevant data sources**: Getting data from popular job board
 - **CV Generation**: Automatically create tailored CVs for each application.  
 - **Enhanced Motivation Letters**: Smarter templates and personalized content based on job description.  
 - **Additional Notification Channels**: Slack, Telegram, or other integrations for job alerts. 
