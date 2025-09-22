@@ -1,0 +1,1213 @@
+{
+  "name": "Job scrap",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1584,
+        -176
+      ],
+      "id": "1bbb0b56-b8ea-459f-9de0-f2c6363ff84b",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://remoteok.com/api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1280,
+        -176
+      ],
+      "id": "97f2538a-4d3b-4eba-970f-f2a90a70101e",
+      "name": "HTTP Request",
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -1280,
+        32
+      ],
+      "id": "b12f9752-0719-4ee4-9e37-5a4487fce376",
+      "name": "RSS Read"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const job = item.json;\n  return {\n    json: {\n      title: job.title,\n      company: \"Unknown\", // not available\n      description: job.contentSnippet,\n      tags: job.categories || [],\n      url: job.link\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        32
+      ],
+      "id": "d972b3f3-5c8d-47dc-bcd3-2e65e89c1444",
+      "name": "Data mapping"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -752,
+        -160
+      ],
+      "id": "72f33868-8220-492f-8deb-c4f3b66a30cc",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format each job entry\nconst jobEntries = items.map(job => {\n  return `**${job.json.title}** — ${job.json.company}\\n📍 ${job.json.location || \"Remote\"}\\n🔗 ${job.json.url}`;\n});\n\n// Discord hard limit\nconst MAX_LENGTH = 1900; // keep a bit of buffer under 2000\n\nlet messages = [];\nlet currentMessage = \"🌟 **Top Jobs Today** 🌟\\n\\n\";\n\nfor (const entry of jobEntries) {\n  if ((currentMessage + \"\\n\\n\" + entry).length > MAX_LENGTH) {\n    // Push current chunk\n    messages.push(currentMessage);\n    // Start a new chunk\n    currentMessage = entry;\n  } else {\n    // Add to current message\n    currentMessage += (currentMessage.trim() ? \"\\n\\n\" : \"\") + entry;\n  }\n}\n\n// Push last message\nif (currentMessage.trim()) {\n  messages.push(currentMessage);\n}\n\n// Return as multiple items (Discord node will send each)\nreturn messages.map(m => ({ json: { content: m } }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -176
+      ],
+      "id": "2e0733a6-45e0-4195-bf97-b0cbda97526f",
+      "name": "Build message"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "1388109404368408746",
+          "mode": "list",
+          "cachedResultName": "Larren's server",
+          "cachedResultUrl": "https://discord.com/channels/1388109404368408746"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "1417403921089167401",
+          "mode": "list",
+          "cachedResultName": "jobs",
+          "cachedResultUrl": "https://discord.com/channels/1388109404368408746/1417403921089167401"
+        },
+        "content": "={{ $json.content }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        -176
+      ],
+      "id": "8533f369-6028-4e1b-9d29-139b6a237e35",
+      "name": "Send a message",
+      "webhookId": "d726e64e-2ee5-4302-8cfa-59c3871c24e9",
+      "credentials": {
+        "discordBotApi": {
+          "id": "8EEwdBlZfNUZFk64",
+          "name": "Discord Bot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobsHtml = items.map(job => {\n  // Encode the job URL so it can safely go in a query string\n  const jobUrlParam = encodeURIComponent(job.json.url);\n\n  return `\n    <div style=\"padding: 15px; border-bottom: 1px solid #eee;\">\n      <h3 style=\"margin: 0; font-size: 18px; color: #333;\">${job.json.title}</h3>\n      <p style=\"margin: 5px 0; color: #555;\">\n        <strong>${job.json.company}</strong><br/>\n      </p>\n      <a href=\"${job.json.url}\" target=\"_blank\"\n         style=\"display:inline-block; padding:10px 18px; margin-top:8px; \n                background:#007bff; color:#fff; text-decoration:none; \n                border-radius:6px; font-weight:bold;\">\n        View Job\n      </a>\n      <br/>\n      <a href=\"http://localhost:5678/webhook-test/motivation?jobUrl=${jobUrlParam}\" target=\"_blank\"\n         style=\"display:inline-block; padding:10px 18px; margin-top:8px; \n                background:#28a745; color:#fff; text-decoration:none; \n                border-radius:6px; font-weight:bold;\">\n        📄 Prepare Letter\n      </a>\n    </div>\n  `;\n}).join('');\n\nconst emailBody = `\n  <div style=\"font-family: Arial, sans-serif; background:#f5f7fa; padding:30px; text-align:center;\">\n    <div style=\"max-width:600px; margin:auto; background:#fff; border-radius:12px; padding:25px; box-shadow:0 4px 10px rgba(0,0,0,0.1);\">\n      <h2 style=\"color:#222; margin-bottom:20px;\">🌟 Top Jobs Today</h2>\n      ${jobsHtml}\n    </div>\n  </div>\n`;\n\nreturn [{\n  json: {\n    htmlBody: emailBody\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -368
+      ],
+      "id": "323889c6-b757-4fac-8eab-c6de0d7352a8",
+      "name": "Format html"
+    },
+    {
+      "parameters": {
+        "tableId": "jobs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json.title }}"
+            },
+            {
+              "fieldId": "company",
+              "fieldValue": "={{ $json.company }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $json.description }}"
+            },
+            {
+              "fieldId": "tags",
+              "fieldValue": "={{ $json.tags }}"
+            },
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $json.url }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -368
+      ],
+      "id": "5722a848-f4d6-4761-8cb5-cbef8be9f2f8",
+      "name": "Save for analytics",
+      "credentials": {
+        "supabaseApi": {
+          "id": "k2QDugqVKOwqaBJz",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items\n  .map(item => {\n    const job = item.json;\n    return {\n      json: {\n        title: job.position || null,\n        company: job.company || null,\n        description: job.description || null,\n        tags: job.tags || [],\n        url: job.url || null\n      }\n    };\n  })\n  .filter(item => item.json.title || item.json.url);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        -176
+      ],
+      "id": "879c2e06-a283-4b26-a552-6e8cd94c5000",
+      "name": "Data mapping1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json;\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <title>CV - ${data.fullName}</title>\n  <style>\n    body { font-family: Arial, sans-serif; margin: 20px; }\n    h1 { color: #333; }\n    h2 { color: #555; margin-top: 20px; }\n    ul { margin-left: 20px; }\n    li { margin-bottom: 5px; }\n  </style>\n</head>\n<body>\n  <h1>${data.fullName}</h1>\n  <p>Email: ${data.email} | Phone: ${data.phone}</p>\n\n  <h2>Skills</h2>\n  <ul>\n    ${data.skills.map(skill => `<li>${skill}</li>`).join('')}\n  </ul>\n\n  <h2>Target Job</h2>\n  <p><strong>${data.jobTitle}</strong> at <strong>${data.company}</strong></p>\n  <p>${data.jobDescription}</p>\n</body>\n</html>\n`;\n\nreturn [{ json: { html } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        1424
+      ],
+      "id": "b1ed34dd-2772-412e-8bc2-77eacf3095ed",
+      "name": "Generate html cv"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdfshift.io/v3/convert/pdf",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "sk_cec7c12b63011ceae9e2dea4c3766321565dda86"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "source",
+              "value": "={{ $json.html }}"
+            },
+            {
+              "name": "landscape",
+              "value": "false"
+            },
+            {
+              "name": "use_print",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        128,
+        1424
+      ],
+      "id": "9fbedcdd-ecb5-43cc-b7a9-a0ddb502448b",
+      "name": "Generate pdf"
+    },
+    {
+      "parameters": {
+        "fromEmail": "larrentony@gmail.com",
+        "toEmail": "larrentony@gmail.com",
+        "subject": "CV for the job",
+        "emailFormat": "text",
+        "text": "CV for your job\n",
+        "options": {
+          "attachments": "=[ { \"fileName\": \"result.pdf\", \"fileContent\": {{ $('Generate pdf').item.binary.data }} } ]"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        512,
+        1424
+      ],
+      "id": "7b434492-cdfa-40f5-9d93-706319ab657c",
+      "name": "Send email1",
+      "webhookId": "040af35f-072d-4007-829e-0becf954facb",
+      "credentials": {
+        "smtp": {
+          "id": "FP1HLoKo6ounbcrM",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "larrentony@gmail.com",
+        "toEmail": "larrentony@gmail.com",
+        "subject": "New job opportunity",
+        "html": "={{ $json.htmlBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1024,
+        -368
+      ],
+      "id": "ae499580-c175-4513-be6b-389fd44061ac",
+      "name": "Send email top job",
+      "webhookId": "040af35f-072d-4007-829e-0becf954facb",
+      "credentials": {
+        "smtp": {
+          "id": "FP1HLoKo6ounbcrM",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a2586580-16e6-410c-b561-0b8dd27fb215",
+              "leftValue": "={{ $json.title }}",
+              "rightValue": "senior",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            },
+            {
+              "id": "742195db-2b1d-4110-bcbb-552f76b5192d",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "e9e99716-029c-4e7b-9e91-3449736b7ec2",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        640,
+        -368
+      ],
+      "id": "ada7d45d-7aa5-4cd9-9d6b-563f26225056",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c49ad066-a0b0-46e8-819b-3d6e5dbe3c56",
+              "leftValue": "={{ $json.tags }}",
+              "rightValue": "c#",
+              "operator": {
+                "type": "array",
+                "operation": "contains",
+                "rightType": "any"
+              }
+            },
+            {
+              "id": "5df52064-eb8e-4c79-a735-73cef9419ff0",
+              "leftValue": "={{ $json.tags }}",
+              "rightValue": "azure",
+              "operator": {
+                "type": "array",
+                "operation": "contains",
+                "rightType": "any"
+              }
+            },
+            {
+              "id": "7cdc1dfe-8a15-4d71-8a93-d1e06582c4d3",
+              "leftValue": "={{ $json.tags }}",
+              "rightValue": "asp.net",
+              "operator": {
+                "type": "array",
+                "operation": "contains",
+                "rightType": "any"
+              }
+            },
+            {
+              "id": "e1e15c2c-a82d-40c7-b05a-02d0854eeb1a",
+              "leftValue": "={{ $json.tags }}",
+              "rightValue": "dotnet",
+              "operator": {
+                "type": "array",
+                "operation": "contains",
+                "rightType": "any"
+              }
+            },
+            {
+              "id": "b0fb1706-f9d6-4505-94f6-7929c40ebcb5",
+              "leftValue": "={{ $json.description }}",
+              "rightValue": "asp",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "6acf4662-cc27-4e78-9783-52c81ee5ecf8",
+              "leftValue": "={{ $json.title }}",
+              "rightValue": "c#",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "3d00ae0c-dd7c-450f-a363-2eb76deead7e",
+              "leftValue": "={{ $json.description }}",
+              "rightValue": ".net",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        144,
+        -352
+      ],
+      "id": "5929bc24-f865-4684-b58f-0dd407a40517",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "tableId": "jobs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json.title }}"
+            },
+            {
+              "fieldId": "company",
+              "fieldValue": "={{ $json.company }}"
+            },
+            {
+              "fieldId": "url",
+              "fieldValue": "={{ $json.url }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $json.description }}"
+            },
+            {
+              "fieldId": "tags",
+              "fieldValue": "={{ $json.tags }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -176
+      ],
+      "id": "a641b102-e3af-4390-8567-e1c3f6461cc2",
+      "name": "Save for analytics1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "k2QDugqVKOwqaBJz",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        688
+      ],
+      "id": "cda67a29-5d59-4624-b59d-d92a2deee163",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "iktHebfyACxk0Bsa",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        416,
+        240
+      ],
+      "id": "6e469ae6-6c1d-4db9-be77-bef57442a0a2",
+      "name": "Update a document",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "HmKqSSlxgPZj4BRi",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "larrentony@gmail.com",
+        "toEmail": "pikololoik806@gmail.com",
+        "subject": "Motivation letter for:",
+        "emailFormat": "text",
+        "text": "=Find a template for you job application letter here https://docs.google.com/document/d/{{ $json.documentId }}",
+        "options": {
+          "attachments": "="
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        640,
+        240
+      ],
+      "id": "ef807b2e-0821-40c6-a817-9a48d6c7925c",
+      "name": "Send email",
+      "webhookId": "040af35f-072d-4007-829e-0becf954facb",
+      "credentials": {
+        "smtp": {
+          "id": "FP1HLoKo6ounbcrM",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "folderId": "18PPQLxQwRTJ3IDNsKUZ9BU84CFfD5-86",
+        "title": "Motivation"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        224
+      ],
+      "id": "940937b5-7193-4bae-87de-1e8391f15d8e",
+      "name": "Create a document",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "HmKqSSlxgPZj4BRi",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        192,
+        240
+      ],
+      "id": "7d31a2b4-2ee9-4eb9-955d-72be8e883cd2",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Application for the position of {{ $json.job.title }}",
+        "message": "=Bonjour, ci joint mon CV et ma lettre de motivation pour le poste de , Veuillez agréer mes sincères salutations, Cordialement,",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -272,
+        896
+      ],
+      "id": "585e09e3-486a-44c3-9e70-d4897ce48db2",
+      "name": "Create a draft",
+      "webhookId": "d8fe10b7-b563-40c3-89a5-7a43b26ba07b",
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "alzOJrUQIEtRCEZi",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -752,
+        480
+      ],
+      "id": "f4ea09de-6bed-4d1d-a20b-a6d162ee04dc",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "jobs",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1264,
+        -368
+      ],
+      "id": "fe0bcf20-7f4d-4765-ac94-d3c1ee5268fa",
+      "name": "Get many rows",
+      "credentials": {
+        "supabaseApi": {
+          "id": "k2QDugqVKOwqaBJz",
+          "name": "n8n automation"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -288,
+        -352
+      ],
+      "id": "441ec4a6-4f19-4c3c-a5c7-25c562e315bf",
+      "name": "Merge4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "34b6474c-14f2-4bea-8c9f-fca20ca715d9",
+              "name": "source",
+              "value": "supabase",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -528,
+        -368
+      ],
+      "id": "1153e450-3225-4642-9358-afab8d64e266",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "145f07a5-c5e6-4681-b0c4-3907ab881855",
+              "name": "source",
+              "value": "api",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -528,
+        -160
+      ],
+      "id": "d367aaf9-da90-4beb-9a7e-b853208b5556",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all merged jobs from previous node\nconst allJobs = items.map(item => item.json);\n\n// Separate Supabase jobs and API jobs\nconst supabaseJobs = allJobs.filter(job => job.source === \"supabase\");\nconst apiJobs = allJobs.filter(job => job.source === \"api\");\n\n// Collect all Supabase URLs for quick lookup\nconst supabaseUrls = new Set(supabaseJobs.map(job => job.url));\n\n// Filter API jobs: keep only the ones not already in Supabase\nconst newJobs = apiJobs.filter(job => !supabaseUrls.has(job.url));\n\n// Return new jobs as items for next node\nreturn newJobs.map(job => ({ json: job }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        -352
+      ],
+      "id": "a4a47124-ab81-4556-84eb-d31c757d0f3a",
+      "name": "Filter existing jobs"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "profile_information",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "nom",
+              "keyValue": "RAKOTOSOLOFO"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1040,
+        752
+      ],
+      "id": "7a3d5f71-cda6-4340-8ca1-e7468a3b55e3",
+      "name": "Personal info1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "ALZxb0BaFBxQ3AZ0",
+          "name": "tony larren"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "url",
+              "keyValue": "={{ $json.query.jobUrl }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1040,
+        464
+      ],
+      "id": "ef96e5e1-eec5-448b-8fb1-1c2cf8a764c1",
+      "name": "Get job",
+      "credentials": {
+        "supabaseApi": {
+          "id": "k2QDugqVKOwqaBJz",
+          "name": "n8n automation"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Create a motivation letter with short paragraphs based on my info:{{ JSON.stringify($json.applicant) }}, and the job {{ JSON.stringify($json.job) }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -288,
+        480
+      ],
+      "id": "60ea93a0-3b1d-44c8-9760-51a599a0c2f2",
+      "name": "Building letter"
+    },
+    {
+      "parameters": {
+        "path": "/motivation",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1568,
+        496
+      ],
+      "id": "3d603452-9ef6-415b-9d02-d36f0f16dd8f",
+      "name": "Build letter",
+      "webhookId": "d58a4663-6462-41d0-88ae-fe3ce7a07ef7"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        1424
+      ],
+      "id": "2869bbb3-4a10-4b4c-9375-6600ce9f1dfa",
+      "name": "When clicking ‘Execute workflow’"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Data mapping1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Data mapping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data mapping": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build message": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format html": {
+      "main": [
+        [
+          {
+            "node": "Send email top job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data mapping1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate html cv": {
+      "main": [
+        [
+          {
+            "node": "Generate pdf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate pdf": {
+      "main": [
+        [
+          {
+            "node": "Send email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email1": {
+      "main": [
+        []
+      ]
+    },
+    "Send email top job": {
+      "main": [
+        []
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Format html",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save for analytics": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Save for analytics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save for analytics1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save for analytics1": {
+      "main": [
+        [
+          {
+            "node": "Build message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Building letter",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a document": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a document": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Update a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        []
+      ]
+    },
+    "Create a draft": {
+      "main": [
+        []
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge4": {
+      "main": [
+        [
+          {
+            "node": "Filter existing jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Merge4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Filter existing jobs": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Personal info1": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get job": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "Building letter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create a draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Building letter": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build letter": {
+      "main": [
+        [
+          {
+            "node": "Create a document",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Personal info1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "52b903ce-3ea9-4921-9119-06c8c9e2cd5e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c1625838c63617ec1d66d0fbaeefbb5dc00a34233781416e24ef4208a68da831"
+  },
+  "id": "NxyJ7MenW3iZM1jj",
+  "tags": []
+}
